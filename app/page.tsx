@@ -292,11 +292,17 @@ export default function Home() {
                             </div>
                           </div>
 
-                          {/* Copy button */}
-                          <CopyButton
-                            text={`<a href="${m.targetUrl}">${m.anchorText}</a>`}
-                            label="Copy HTML"
-                          />
+                          {/* Copy buttons */}
+                          <div className="flex flex-col gap-1.5">
+                            <CopyButton
+                              text={`<a href="${m.targetUrl}">${m.anchorText}</a>`}
+                              label="Copy HTML"
+                            />
+                            <CopyButton
+                              text={m.targetUrl}
+                              label="Copy URL"
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -364,14 +370,20 @@ export default function Home() {
                             </a>
                           </div>
 
-                          {/* Copy button — copies the full sentence with anchor link */}
-                          <CopyButton
-                            text={c.ctaSentence.replace(
-                              c.anchorText,
-                              `<a href="${c.targetUrl}">${c.anchorText}</a>`
-                            )}
-                            label="Copy HTML"
-                          />
+                          {/* Copy buttons */}
+                          <div className="flex flex-col gap-1.5">
+                            <CopyButton
+                              text={c.ctaSentence.replace(
+                                c.anchorText,
+                                `<a href="${c.targetUrl}">${c.anchorText}</a>`
+                              )}
+                              label="Copy HTML"
+                            />
+                            <CopyButton
+                              text={c.targetUrl}
+                              label="Copy URL"
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
