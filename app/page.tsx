@@ -122,8 +122,8 @@ export default function Home() {
       {/* Header */}
       <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
-            R
+          <div className="w-8 h-8 flex items-center justify-center text-xl">
+            💖
           </div>
           <div>
             <h1 className="text-white font-semibold text-base leading-tight">
