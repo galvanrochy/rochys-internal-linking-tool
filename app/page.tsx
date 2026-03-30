@@ -175,11 +175,22 @@ export default function Home() {
     }
 
     // ── Title ──────────────────────────────────────────────────────────────
+    const blogTitle = blogContent.split("\n").map((l) => l.trim()).find((l) => l.length > 0) || "";
+
     doc.setFontSize(20);
     doc.setFont("helvetica", "bold");
     setColor(COLORS.heading);
     doc.text("Internal Linking Report", margin, y);
-    y += 28;
+    y += 26;
+
+    if (blogTitle) {
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "normal");
+      setColor(COLORS.body);
+      const titleLines = wrap(blogTitle, 13, contentW);
+      doc.text(titleLines, margin, y);
+      y += titleLines.length * 18;
+    }
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -236,17 +247,6 @@ export default function Home() {
         const urlLines = wrap(m.targetUrl, 9, contentW - 12);
         doc.text(urlLines, margin + 12, y);
         y += urlLines.length * 13;
-
-        // Context snippet
-        if (m.contextSnippet) {
-          checkPage(30);
-          doc.setFontSize(8.5);
-          doc.setFont("helvetica", "italic");
-          setColor(COLORS.muted);
-          const ctxLines = wrap(m.contextSnippet, 8.5, contentW - 12);
-          doc.text(ctxLines, margin + 12, y);
-          y += ctxLines.length * 12;
-        }
 
         y += 10;
         if (i < results.exactMatches.length - 1) {
