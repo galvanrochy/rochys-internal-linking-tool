@@ -2,222 +2,384 @@
 
 import { useState } from "react";
 
-interface CrawledPage {
-  url: string;
-  title: string;
-  description: string;
-  keywords: string[];
-}
-
-interface LinkSuggestion {
+interface ExactMatchResult {
   anchorText: string;
   targetUrl: string;
   targetTitle: string;
-  reason: string;
+  contextSnippet: string;
+  section: string;
+}
+
+interface BlogCTAResult {
+  ctaSentence: string;
+  anchorText: string;
+  targetUrl: string;
+  targetTitle: string;
+  insertAfterParagraph: string;
+}
+
+interface AnalyzeResponse {
+  exactMatches: ExactMatchResult[];
+  blogCTAs: BlogCTAResult[];
+  stats: {
+    servicePagesFound: number;
+    blogPostsFound: number;
+  };
+}
+
+const SECTION_COLORS: Record<string, string> = {
+  Role: "bg-violet-500/20 text-violet-300 border-violet-500/30",
+  "Case Study": "bg-amber-500/20 text-amber-300 border-amber-500/30",
+  Playbook: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  Software: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+  "Hire Remote": "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  Alternative: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+  Page: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+};
+
+function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      className="shrink-0 text-xs px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition font-medium"
+    >
+      {copied ? "Copied!" : label}
+    </button>
+  );
+}
+
+function highlightAnchor(text: string, anchor: string) {
+  const escaped = anchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "i"));
+  return parts.map((part, i) =>
+    new RegExp(`^${escaped}$`, "i").test(part) ? (
+      <mark key={i} className="bg-blue-500/30 text-blue-200 rounded px-0.5">
+        {part}
+      </mark>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
 }
 
 export default function Home() {
-  const [siteUrl, setSiteUrl] = useState("");
   const [blogContent, setBlogContent] = useState("");
-  const [crawledPages, setCrawledPages] = useState<CrawledPage[]>([]);
-  const [suggestions, setSuggestions] = useState<LinkSuggestion[]>([]);
-  const [crawling, setCrawling] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [crawlError, setCrawlError] = useState("");
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-
-  async function handleCrawl() {
-    if (!siteUrl.trim()) return;
-    setCrawling(true);
-    setCrawlError("");
-    setCrawledPages([]);
-    setSuggestions([]);
-    try {
-      const res = await fetch("/api/crawl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: siteUrl.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Crawl failed");
-      setCrawledPages(data.pages);
-      setStep(2);
-    } catch (e: unknown) {
-      setCrawlError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setCrawling(false);
-    }
-  }
+  const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState("");
+  const [results, setResults] = useState<AnalyzeResponse | null>(null);
+  const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState<"exact" | "blog">("exact");
 
   async function handleAnalyze() {
-    if (!blogContent.trim() || crawledPages.length === 0) return;
-    setAnalyzing(true);
-    setSuggestions([]);
+    if (!blogContent.trim()) return;
+    setLoading(true);
+    setError("");
+    setResults(null);
+
+    const messages = [
+      "Crawling hireoverseas.com…",
+      "Scanning /roles, /case-studies, /playbooks…",
+      "Scanning /hire-remote, /alternatives, /software-assistant…",
+      "Scanning /blog posts…",
+      "Finding exact match opportunities…",
+      "Generating blog CTA suggestions with AI…",
+    ];
+    let msgIdx = 0;
+    setLoadingMsg(messages[0]);
+    const interval = setInterval(() => {
+      msgIdx = Math.min(msgIdx + 1, messages.length - 1);
+      setLoadingMsg(messages[msgIdx]);
+    }, 4000);
+
     try {
-      const res = await fetch("/api/suggest", {
+      const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: blogContent, pages: crawledPages }),
+        body: JSON.stringify({ blogContent: blogContent.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Analysis failed");
-      setSuggestions(data.suggestions);
-      setStep(3);
+      setResults(data);
+      setActiveTab(data.exactMatches.length > 0 ? "exact" : "blog");
     } catch (e: unknown) {
-      setCrawlError(e instanceof Error ? e.message : "Analysis failed");
+      setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
-      setAnalyzing(false);
+      clearInterval(interval);
+      setLoading(false);
     }
   }
 
-  function highlightContent(content: string, suggestions: LinkSuggestion[]) {
-    if (!suggestions.length) return content;
-    let result = content;
-    suggestions.forEach(({ anchorText, targetUrl }) => {
-      const escaped = anchorText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      result = result.replace(
-        new RegExp(`(${escaped})`, "gi"),
-        `<a href="${targetUrl}" target="_blank" class="text-blue-600 underline font-medium">$1</a>`
-      );
-    });
-    return result;
-  }
+  const wordCount = blogContent.trim().split(/\s+/).filter(Boolean).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
-      <header className="border-b border-slate-700 bg-slate-900/80 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">R</div>
-          <h1 className="text-white font-semibold text-lg">Rochy&apos;s Internal Linking Tool</h1>
-          <span className="ml-auto text-slate-400 text-sm">{crawledPages.length > 0 && `${crawledPages.length} pages crawled`}</span>
+      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
+            R
+          </div>
+          <div>
+            <h1 className="text-white font-semibold text-base leading-tight">
+              Rochy&apos;s Internal Linking Tool
+            </h1>
+            <p className="text-slate-500 text-xs">hireoverseas.com — real-time crawl</p>
+          </div>
+          {results && (
+            <div className="ml-auto flex gap-3 text-xs text-slate-500">
+              <span>{results.stats.servicePagesFound} service pages</span>
+              <span>·</span>
+              <span>{results.stats.blogPostsFound} blog posts</span>
+            </div>
+          )}
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-10 space-y-8">
-        {/* Step indicators */}
-        <div className="flex items-center gap-2 text-sm">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center font-semibold text-xs
-                ${step >= s ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-400"}`}>
-                {s}
-              </div>
-              <span className={step >= s ? "text-white" : "text-slate-500"}>
-                {s === 1 ? "Crawl Site" : s === 2 ? "Paste Blog Post" : "View Suggestions"}
+      <main className="max-w-4xl mx-auto px-6 py-10 space-y-8">
+        {/* Input */}
+        <section className="bg-slate-900 rounded-2xl p-6 border border-slate-800">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h2 className="text-white font-semibold">Paste Your Blog Draft</h2>
+              <p className="text-slate-500 text-sm mt-0.5">
+                The tool will crawl hireoverseas.com in real-time and find internal linking
+                opportunities.
+              </p>
+            </div>
+            {wordCount > 0 && (
+              <span className="text-slate-500 text-xs mt-1 shrink-0 ml-4">
+                {wordCount.toLocaleString()} words
               </span>
-              {s < 3 && <div className="w-8 h-px bg-slate-700 mx-1" />}
-            </div>
-          ))}
-        </div>
-
-        {/* Step 1: Crawl */}
-        <section className="bg-slate-800 rounded-2xl p-6 border border-slate-700">
-          <h2 className="text-white font-semibold mb-1">Step 1 — Crawl Your Website</h2>
-          <p className="text-slate-400 text-sm mb-4">Enter your website URL to discover all pages and posts.</p>
-          <div className="flex gap-3">
-            <input
-              type="url"
-              value={siteUrl}
-              onChange={(e) => setSiteUrl(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCrawl()}
-              placeholder="https://yourblog.com"
-              className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
-            />
-            <button
-              onClick={handleCrawl}
-              disabled={crawling || !siteUrl.trim()}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition"
-            >
-              {crawling ? "Crawling…" : "Crawl"}
-            </button>
+            )}
           </div>
-          {crawlError && <p className="mt-3 text-red-400 text-sm">{crawlError}</p>}
-          {crawledPages.length > 0 && (
-            <div className="mt-4">
-              <p className="text-green-400 text-sm font-medium mb-2">✓ Found {crawledPages.length} pages</p>
-              <div className="max-h-48 overflow-y-auto space-y-1">
-                {crawledPages.map((p, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm">
-                    <span className="text-slate-500 w-5 text-right">{i + 1}.</span>
-                    <a href={p.url} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline truncate">{p.title || p.url}</a>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* Step 2: Blog post */}
-        <section className={`bg-slate-800 rounded-2xl p-6 border transition ${step < 2 ? "border-slate-700 opacity-50 pointer-events-none" : "border-slate-700"}`}>
-          <h2 className="text-white font-semibold mb-1">Step 2 — Paste Your Blog Post</h2>
-          <p className="text-slate-400 text-sm mb-4">Paste the content you&apos;re writing. The tool will find linking opportunities.</p>
           <textarea
             value={blogContent}
             onChange={(e) => setBlogContent(e.target.value)}
-            placeholder="Paste your blog post content here…"
-            rows={10}
-            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition resize-none"
+            placeholder="Paste your full blog post content here…"
+            rows={12}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition resize-none text-sm leading-relaxed"
           />
           <div className="mt-3 flex items-center justify-between">
-            <span className="text-slate-500 text-sm">{blogContent.trim().split(/\s+/).filter(Boolean).length} words</span>
+            <p className="text-slate-600 text-xs">
+              Crawls /roles, /case-studies, /playbooks, /software-assistant, /hire-remote,
+              /alternatives &amp; /blog
+            </p>
             <button
               onClick={handleAnalyze}
-              disabled={analyzing || !blogContent.trim() || crawledPages.length === 0}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition"
+              disabled={loading || !blogContent.trim()}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition text-sm"
             >
-              {analyzing ? "Analyzing…" : "Find Internal Links"}
+              {loading ? "Analyzing…" : "Find Internal Links"}
             </button>
           </div>
+          {loading && (
+            <div className="mt-4 flex items-center gap-3">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />
+              <p className="text-blue-400 text-sm">{loadingMsg}</p>
+            </div>
+          )}
+          {error && <p className="mt-3 text-red-400 text-sm">{error}</p>}
         </section>
 
-        {/* Step 3: Suggestions */}
-        {suggestions.length > 0 && (
-          <section className="bg-slate-800 rounded-2xl p-6 border border-slate-700">
-            <h2 className="text-white font-semibold mb-1">Step 3 — Internal Link Suggestions</h2>
-            <p className="text-slate-400 text-sm mb-5">{suggestions.length} linking opportunities found.</p>
+        {/* Results */}
+        {results && (
+          <section className="space-y-4">
+            {/* Tabs */}
+            <div className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-fit">
+              <button
+                onClick={() => setActiveTab("exact")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  activeTab === "exact"
+                    ? "bg-slate-700 text-white"
+                    : "text-slate-400 hover:text-slate-300"
+                }`}
+              >
+                Exact Match Links
+                <span
+                  className={`ml-2 px-1.5 py-0.5 rounded text-xs font-semibold ${
+                    activeTab === "exact"
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-700 text-slate-400"
+                  }`}
+                >
+                  {results.exactMatches.length}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("blog")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  activeTab === "blog"
+                    ? "bg-slate-700 text-white"
+                    : "text-slate-400 hover:text-slate-300"
+                }`}
+              >
+                Blog Link CTAs
+                <span
+                  className={`ml-2 px-1.5 py-0.5 rounded text-xs font-semibold ${
+                    activeTab === "blog"
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-700 text-slate-400"
+                  }`}
+                >
+                  {results.blogCTAs.length}
+                </span>
+              </button>
+            </div>
 
-            {/* Suggestions list */}
-            <div className="space-y-3 mb-8">
-              {suggestions.map((s, i) => (
-                <div key={i} className="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-semibold bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded">Anchor text</span>
-                        <span className="text-white font-medium">&ldquo;{s.anchorText}&rdquo;</span>
-                      </div>
-                      <p className="text-slate-400 text-sm mb-1">→ <span className="text-slate-300">{s.targetTitle}</span></p>
-                      <a href={s.targetUrl} target="_blank" rel="noreferrer" className="text-blue-400 text-xs hover:underline truncate block">{s.targetUrl}</a>
-                      <p className="text-slate-500 text-xs mt-1">{s.reason}</p>
-                    </div>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(`<a href="${s.targetUrl}">${s.anchorText}</a>`)}
-                      className="shrink-0 text-xs px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition"
-                    >
-                      Copy HTML
-                    </button>
+            {/* Exact Match Tab */}
+            {activeTab === "exact" && (
+              <div className="space-y-3">
+                {results.exactMatches.length === 0 ? (
+                  <div className="bg-slate-900 rounded-2xl p-8 border border-slate-800 text-center">
+                    <p className="text-slate-400">
+                      No exact match opportunities found in this draft.
+                    </p>
+                    <p className="text-slate-600 text-sm mt-1">
+                      Try adding more content or check the blog tab for CTA suggestions.
+                    </p>
                   </div>
-                </div>
-              ))}
-            </div>
+                ) : (
+                  <>
+                    <p className="text-slate-500 text-sm px-1">
+                      {results.exactMatches.length} phrase
+                      {results.exactMatches.length !== 1 ? "s" : ""} in your draft exactly
+                      match pages on hireoverseas.com — link them directly.
+                    </p>
+                    {results.exactMatches.map((m, i) => (
+                      <div
+                        key={i}
+                        className="bg-slate-900 rounded-2xl p-5 border border-slate-800 hover:border-slate-700 transition"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0 space-y-2">
+                            {/* Top row: section badge + anchor text */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className={`text-xs font-semibold px-2 py-0.5 rounded border ${
+                                  SECTION_COLORS[m.section] || SECTION_COLORS["Page"]
+                                }`}
+                              >
+                                {m.section}
+                              </span>
+                              <span className="text-white font-semibold">
+                                &ldquo;{m.anchorText}&rdquo;
+                              </span>
+                            </div>
 
-            {/* Highlighted preview */}
-            <div>
-              <h3 className="text-white font-semibold mb-3">Blog Post Preview with Links</h3>
-              <div
-                className="bg-slate-900 rounded-xl p-5 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap border border-slate-700"
-                dangerouslySetInnerHTML={{ __html: highlightContent(blogContent, suggestions) }}
-              />
-            </div>
+                            {/* Target */}
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-slate-500">Links to:</span>
+                              <span className="text-slate-200">{m.targetTitle}</span>
+                            </div>
+                            <a
+                              href={m.targetUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-400 text-xs hover:underline truncate block"
+                            >
+                              {m.targetUrl}
+                            </a>
+
+                            {/* Context snippet */}
+                            <div className="bg-slate-950 rounded-lg px-3 py-2 text-slate-400 text-xs leading-relaxed border border-slate-800">
+                              {highlightAnchor(m.contextSnippet, m.anchorText)}
+                            </div>
+                          </div>
+
+                          {/* Copy button */}
+                          <CopyButton
+                            text={`<a href="${m.targetUrl}">${m.anchorText}</a>`}
+                            label="Copy HTML"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Blog CTA Tab */}
+            {activeTab === "blog" && (
+              <div className="space-y-3">
+                {results.blogCTAs.length === 0 ? (
+                  <div className="bg-slate-900 rounded-2xl p-8 border border-slate-800 text-center">
+                    <p className="text-slate-400">No blog CTA suggestions generated.</p>
+                    <p className="text-slate-600 text-sm mt-1">
+                      Make sure ANTHROPIC_API_KEY is set or try a longer blog draft.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-slate-500 text-sm px-1">
+                      {results.blogCTAs.length} read-more CTA
+                      {results.blogCTAs.length !== 1 ? "s" : ""} to add to your draft. Each is a
+                      sentence to insert at the suggested location.
+                    </p>
+                    {results.blogCTAs.map((c, i) => (
+                      <div
+                        key={i}
+                        className="bg-slate-900 rounded-2xl p-5 border border-slate-800 hover:border-slate-700 transition"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0 space-y-3">
+                            {/* CTA sentence with anchor highlighted */}
+                            <div>
+                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                                CTA Sentence to insert
+                              </p>
+                              <p className="text-slate-200 text-sm leading-relaxed">
+                                {highlightAnchor(c.ctaSentence, c.anchorText)}
+                              </p>
+                            </div>
+
+                            {/* Insert location */}
+                            {c.insertAfterParagraph && (
+                              <div className="bg-slate-950 rounded-lg px-3 py-2 border border-slate-800">
+                                <p className="text-xs text-slate-600 mb-1">Insert after paragraph starting with:</p>
+                                <p className="text-slate-400 text-xs italic">
+                                  &ldquo;{c.insertAfterParagraph}&rdquo;
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Target blog */}
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-slate-500 text-xs">Links to:</span>
+                              <span className="text-slate-200 text-xs">{c.targetTitle}</span>
+                            </div>
+                            <a
+                              href={c.targetUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-400 text-xs hover:underline truncate block"
+                            >
+                              {c.targetUrl}
+                            </a>
+                          </div>
+
+                          {/* Copy button — copies the full sentence with anchor link */}
+                          <CopyButton
+                            text={c.ctaSentence.replace(
+                              c.anchorText,
+                              `<a href="${c.targetUrl}">${c.anchorText}</a>`
+                            )}
+                            label="Copy HTML"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
           </section>
-        )}
-
-        {step === 3 && suggestions.length === 0 && !analyzing && (
-          <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 text-center">
-            <p className="text-slate-400">No internal linking opportunities found for this content.</p>
-            <p className="text-slate-500 text-sm mt-1">Try crawling more pages or expanding your blog post content.</p>
-          </div>
         )}
       </main>
     </div>
