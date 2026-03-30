@@ -107,7 +107,6 @@ const SEGMENT_OVERRIDES: Record<string, string> = {
   ecommerce: "eCommerce",
   facebook: "Facebook",
   google: "Google",
-  shopify: "Shopify",
 };
 
 // Generic slug words that shouldn't be used as standalone anchor text
@@ -331,7 +330,7 @@ async function fetchSitemapUrls(subfolder: string): Promise<string[]> {
 
       // Handle sitemap index → fetch sub-sitemaps
       const subSitemaps: string[] = [];
-      $("sitemap > loc").each((_, el) => subSitemaps.push($(el).text().trim()));
+      $("sitemap > loc").each((_, el) => { subSitemaps.push($(el).text().trim()); });
 
       if (subSitemaps.length > 0) {
         const subResults = await Promise.all(
@@ -340,14 +339,14 @@ async function fetchSitemapUrls(subfolder: string): Promise<string[]> {
               const sub = await axios.get(loc, { timeout: 8000, headers: { "User-Agent": "Mozilla/5.0" } });
               const $sub = cheerio.load(sub.data, { xmlMode: true });
               const urls: string[] = [];
-              $sub("url > loc").each((_, el) => urls.push($sub(el).text().trim()));
+              $sub("url > loc").each((_, el) => { urls.push($sub(el).text().trim()); });
               return urls;
             } catch { return []; }
           })
         );
         allUrls.push(...subResults.flat());
       } else {
-        $("url > loc").each((_, el) => allUrls.push($(el).text().trim()));
+        $("url > loc").each((_, el) => { allUrls.push($(el).text().trim()); });
       }
 
       const filtered = allUrls.filter((u) => {
