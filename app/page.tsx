@@ -292,17 +292,10 @@ export default function Home() {
                             </div>
                           </div>
 
-                          {/* Copy buttons */}
-                          <div className="flex flex-col gap-1.5">
-                            <CopyButton
-                              text={`<a href="${m.targetUrl}">${m.anchorText}</a>`}
-                              label="Copy HTML"
-                            />
-                            <CopyButton
-                              text={m.targetUrl}
-                              label="Copy URL"
-                            />
-                          </div>
+                          <CopyButton
+                            text={m.targetUrl}
+                            label="Copy URL"
+                          />
                         </div>
                       </div>
                     ))}
@@ -370,20 +363,10 @@ export default function Home() {
                             </a>
                           </div>
 
-                          {/* Copy buttons */}
-                          <div className="flex flex-col gap-1.5">
-                            <CopyButton
-                              text={c.ctaSentence.replace(
-                                c.anchorText,
-                                `<a href="${c.targetUrl}">${c.anchorText}</a>`
-                              )}
-                              label="Copy HTML"
-                            />
-                            <CopyButton
-                              text={c.targetUrl}
-                              label="Copy URL"
-                            />
-                          </div>
+                          <CopyButton
+                            text={c.targetUrl}
+                            label="Copy URL"
+                          />
                         </div>
                       </div>
                     ))}
