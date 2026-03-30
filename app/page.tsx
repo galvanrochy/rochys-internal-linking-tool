@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import jsPDF from "jspdf";
 
 interface ExactMatchResult {
   anchorText: string;
@@ -132,6 +133,207 @@ export default function Home() {
 
   const wordCount = blogContent.trim().split(/\s+/).filter(Boolean).length;
 
+  function downloadPDF() {
+    if (!results) return;
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const margin = 48;
+    const contentW = pageW - margin * 2;
+    let y = margin;
+
+    const COLORS = {
+      heading:  [15, 23, 42]  as [number, number, number],
+      subhead:  [37, 99, 235] as [number, number, number],
+      label:    [100, 116, 139] as [number, number, number],
+      body:     [30, 41, 59]  as [number, number, number],
+      muted:    [148, 163, 184] as [number, number, number],
+      rule:     [226, 232, 240] as [number, number, number],
+    };
+
+    function setColor(c: [number, number, number]) {
+      doc.setTextColor(c[0], c[1], c[2]);
+    }
+
+    function rule() {
+      doc.setDrawColor(COLORS.rule[0], COLORS.rule[1], COLORS.rule[2]);
+      doc.setLineWidth(0.5);
+      doc.line(margin, y, pageW - margin, y);
+      y += 12;
+    }
+
+    function checkPage(needed = 60) {
+      if (y + needed > doc.internal.pageSize.getHeight() - margin) {
+        doc.addPage();
+        y = margin;
+      }
+    }
+
+    // Wrap text and return lines
+    function wrap(text: string, fontSize: number, maxW: number): string[] {
+      doc.setFontSize(fontSize);
+      return doc.splitTextToSize(text, maxW);
+    }
+
+    // ── Title ──────────────────────────────────────────────────────────────
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    setColor(COLORS.heading);
+    doc.text("Internal Linking Report", margin, y);
+    y += 28;
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    setColor(COLORS.muted);
+    doc.text(`hireoverseas.com  ·  Generated ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, margin, y);
+    y += 8;
+    doc.text(`${results.stats.servicePagesFound} service pages crawled  ·  ${results.stats.blogPostsFound} blog posts crawled`, margin, y);
+    y += 20;
+    rule();
+
+    // ── Section 1: Exact Match Links ───────────────────────────────────────
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    setColor(COLORS.heading);
+    doc.text(`Exact Match Links  (${results.exactMatches.length})`, margin, y);
+    y += 22;
+
+    if (results.exactMatches.length === 0) {
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "italic");
+      setColor(COLORS.muted);
+      doc.text("No exact match opportunities found.", margin, y);
+      y += 20;
+    } else {
+      results.exactMatches.forEach((m, i) => {
+        checkPage(80);
+
+        // Number + section badge
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        setColor(COLORS.subhead);
+        doc.text(`${i + 1}.  [${m.section}]`, margin, y);
+        y += 15;
+
+        // Anchor phrase
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        setColor(COLORS.body);
+        const phraseLines = wrap(`"${m.anchorText}"`, 11, contentW);
+        doc.text(phraseLines, margin + 12, y);
+        y += phraseLines.length * 15;
+
+        // Target title
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        setColor(COLORS.label);
+        doc.text("Links to:", margin + 12, y);
+        setColor(COLORS.body);
+        doc.text(m.targetTitle, margin + 58, y);
+        y += 13;
+
+        // URL
+        setColor(COLORS.subhead);
+        const urlLines = wrap(m.targetUrl, 9, contentW - 12);
+        doc.text(urlLines, margin + 12, y);
+        y += urlLines.length * 13;
+
+        // Context snippet
+        if (m.contextSnippet) {
+          checkPage(30);
+          doc.setFontSize(8.5);
+          doc.setFont("helvetica", "italic");
+          setColor(COLORS.muted);
+          const ctxLines = wrap(m.contextSnippet, 8.5, contentW - 12);
+          doc.text(ctxLines, margin + 12, y);
+          y += ctxLines.length * 12;
+        }
+
+        y += 10;
+        if (i < results.exactMatches.length - 1) {
+          doc.setDrawColor(COLORS.rule[0], COLORS.rule[1], COLORS.rule[2]);
+          doc.setLineWidth(0.3);
+          doc.line(margin + 12, y, pageW - margin, y);
+          y += 10;
+        }
+      });
+    }
+
+    y += 10;
+    checkPage(40);
+    rule();
+
+    // ── Section 2: Blog Link CTAs ─────────────────────────────────────────
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    setColor(COLORS.heading);
+    doc.text(`Blog Link CTAs  (${results.blogCTAs.length})`, margin, y);
+    y += 22;
+
+    if (results.blogCTAs.length === 0) {
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "italic");
+      setColor(COLORS.muted);
+      doc.text("No blog CTA suggestions generated.", margin, y);
+      y += 20;
+    } else {
+      results.blogCTAs.forEach((c, i) => {
+        checkPage(100);
+
+        // Number
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        setColor(COLORS.subhead);
+        doc.text(`${i + 1}.`, margin, y);
+        y += 15;
+
+        // CTA sentence
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        setColor(COLORS.body);
+        const ctaLines = wrap(c.ctaSentence, 11, contentW - 12);
+        doc.text(ctaLines, margin + 12, y);
+        y += ctaLines.length * 15;
+
+        // Target
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        setColor(COLORS.label);
+        doc.text("Links to:", margin + 12, y);
+        setColor(COLORS.body);
+        const titleLines = wrap(c.targetTitle, 9, contentW - 60);
+        doc.text(titleLines, margin + 58, y);
+        y += titleLines.length * 13;
+
+        // URL
+        setColor(COLORS.subhead);
+        const urlLines = wrap(c.targetUrl, 9, contentW - 12);
+        doc.text(urlLines, margin + 12, y);
+        y += urlLines.length * 13;
+
+        // Insert location
+        if (c.insertAfterParagraph) {
+          checkPage(25);
+          doc.setFontSize(8.5);
+          doc.setFont("helvetica", "italic");
+          setColor(COLORS.muted);
+          const insertLines = wrap(`Insert after: "${c.insertAfterParagraph}"`, 8.5, contentW - 12);
+          doc.text(insertLines, margin + 12, y);
+          y += insertLines.length * 12;
+        }
+
+        y += 10;
+        if (i < results.blogCTAs.length - 1) {
+          doc.setDrawColor(COLORS.rule[0], COLORS.rule[1], COLORS.rule[2]);
+          doc.setLineWidth(0.3);
+          doc.line(margin + 12, y, pageW - margin, y);
+          y += 10;
+        }
+      });
+    }
+
+    doc.save("internal-linking-report.pdf");
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
@@ -230,7 +432,8 @@ export default function Home() {
         {/* Results */}
         {results && (
           <section className="space-y-4">
-            {/* Tabs */}
+            {/* Tabs + Download */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-fit">
               <button
                 onClick={() => setActiveTab("exact")}
@@ -270,6 +473,19 @@ export default function Home() {
                   {results.blogCTAs.length}
                 </span>
               </button>
+            </div>
+
+            <button
+              onClick={downloadPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-sm font-medium rounded-xl transition"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download PDF
+            </button>
             </div>
 
             {/* Exact Match Tab */}
