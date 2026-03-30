@@ -175,7 +175,7 @@ export default function Home() {
     }
 
     // ── Title ──────────────────────────────────────────────────────────────
-    const blogTitle = blogContent.split("\n").map((l) => l.trim()).find((l) => l.length > 0) || "";
+    const blogTitle = blogContent.split("\n").map((l) => l.trim()).find((l) => l.length > 20) || "";
 
     doc.setFontSize(20);
     doc.setFont("helvetica", "bold");
