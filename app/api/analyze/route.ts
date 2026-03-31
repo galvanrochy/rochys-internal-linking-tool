@@ -487,7 +487,21 @@ function findExactMatches(blogContent: string, pages: PageEntry[]): ExactMatchRe
       (a, b) => b.split(/\s+/).length - a.split(/\s+/).length
     );
 
+    // Build candidates including plural variants for multi-word terms
+    const withPlurals: string[] = [];
     for (const term of candidates) {
+      withPlurals.push(term);
+      const words = term.split(/\s+/);
+      if (words.length >= 2) {
+        const lastWord = words[words.length - 1];
+        const plural = /[sxz]$/i.test(lastWord) || /[^aeiou]h$/i.test(lastWord)
+          ? term + "es"
+          : term + "s";
+        withPlurals.push(plural);
+      }
+    }
+
+    for (const term of withPlurals) {
       if (!term || term.length < 2) continue;
       if (usedAnchors.has(term.toLowerCase())) continue;
 
@@ -649,7 +663,8 @@ INSTRUCTIONS:
 2. Check the blog list — does ANY post cover that exact subtopic? If not, skip that paragraph
 3. For each valid match, write a CTA sentence that reads as a natural next sentence after the paragraph
 4. Include "anchorText" = the exact descriptive noun phrase within the CTA to hyperlink (not the full sentence)
-5. Return 3–5 CTAs only for paragraphs with a genuinely tight match. Quality over quantity.
+5. Return 3–6 CTAs spread across DIFFERENT paragraph numbers — max 1 CTA per paragraph. Never put two CTAs at the same [P#].
+6. Quality over quantity; skip any CTA where the connection feels even slightly forced.
 
 BLOG PARAGRAPHS:
 ---
@@ -666,7 +681,7 @@ Return ONLY a valid JSON array, no markdown:
     "anchorText": "the specific noun phrase within the sentence to hyperlink",
     "targetUrl": "...",
     "targetTitle": "...",
-    "insertAfterParagraph": "first 8-10 words of the paragraph [P#] this follows..."
+    "insertAfterParagraph": "[P#] first 6-8 words of that paragraph"
   }
 ]`;
 
