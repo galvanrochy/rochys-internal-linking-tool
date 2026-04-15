@@ -19,12 +19,23 @@ interface BlogCTAResult {
   insertAfterParagraph: string;
 }
 
+interface CaseStudyCTAResult {
+  ctaSentence: string;
+  anchorText: string;
+  targetUrl: string;
+  targetTitle: string;
+  insertAfterParagraph: string;
+  companyName: string;
+}
+
 interface AnalyzeResponse {
   exactMatches: ExactMatchResult[];
   blogCTAs: BlogCTAResult[];
+  caseStudyCTAs: CaseStudyCTAResult[];
   stats: {
     servicePagesFound: number;
     blogPostsFound: number;
+    caseStudiesFound: number;
   };
 }
 
@@ -75,7 +86,7 @@ export default function Home() {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [results, setResults] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"exact" | "blog">("exact");
+  const [activeTab, setActiveTab] = useState<"exact" | "blog" | "casestudy">("exact");
   const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
@@ -105,6 +116,7 @@ export default function Home() {
       "Scanning /blog posts…",
       "Finding exact match opportunities…",
       "Generating blog CTA suggestions with AI…",
+      "Fetching case studies & generating case study CTAs…",
     ];
     let msgIdx = 0;
     setLoadingMsg(messages[0]);
@@ -122,7 +134,13 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Analysis failed");
       setResults(data);
-      setActiveTab(data.exactMatches.length > 0 ? "exact" : "blog");
+      setActiveTab(
+        data.exactMatches.length > 0
+          ? "exact"
+          : data.blogCTAs.length > 0
+          ? "blog"
+          : "casestudy"
+      );
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -331,6 +349,79 @@ export default function Home() {
       });
     }
 
+    y += 10;
+    checkPage(40);
+    rule();
+
+    // ── Section 3: Case Study CTAs ────────────────────────────────────────────
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    setColor(COLORS.heading);
+    doc.text(`Case Study CTAs  (${results.caseStudyCTAs.length})`, margin, y);
+    y += 22;
+
+    if (results.caseStudyCTAs.length === 0) {
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "italic");
+      setColor(COLORS.muted);
+      doc.text("No case study CTA suggestions generated.", margin, y);
+      y += 20;
+    } else {
+      results.caseStudyCTAs.forEach((c, i) => {
+        checkPage(100);
+
+        // Number + company
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        setColor(COLORS.subhead);
+        doc.text(`${i + 1}.${c.companyName ? `  [${c.companyName}]` : ""}`, margin, y);
+        y += 15;
+
+        // CTA sentence
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        setColor(COLORS.body);
+        const ctaLines = wrap(c.ctaSentence, 11, contentW - 12);
+        doc.text(ctaLines, margin + 12, y);
+        y += ctaLines.length * 15;
+
+        // Target
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        setColor(COLORS.label);
+        doc.text("Links to:", margin + 12, y);
+        setColor(COLORS.body);
+        const titleLines = wrap(c.targetTitle, 9, contentW - 60);
+        doc.text(titleLines, margin + 58, y);
+        y += titleLines.length * 13;
+
+        // URL
+        setColor(COLORS.subhead);
+        const urlLines = wrap(c.targetUrl, 9, contentW - 12);
+        doc.text(urlLines, margin + 12, y);
+        y += urlLines.length * 13;
+
+        // Insert location
+        if (c.insertAfterParagraph) {
+          checkPage(25);
+          doc.setFontSize(8.5);
+          doc.setFont("helvetica", "italic");
+          setColor(COLORS.muted);
+          const insertLines = wrap(`Insert after: "${c.insertAfterParagraph}"`, 8.5, contentW - 12);
+          doc.text(insertLines, margin + 12, y);
+          y += insertLines.length * 12;
+        }
+
+        y += 10;
+        if (i < results.caseStudyCTAs.length - 1) {
+          doc.setDrawColor(COLORS.rule[0], COLORS.rule[1], COLORS.rule[2]);
+          doc.setLineWidth(0.3);
+          doc.line(margin + 12, y, pageW - margin, y);
+          y += 10;
+        }
+      });
+    }
+
     doc.save("internal-linking-report.pdf");
   }
 
@@ -354,6 +445,8 @@ export default function Home() {
                 <span>{results.stats.servicePagesFound} service pages</span>
                 <span>·</span>
                 <span>{results.stats.blogPostsFound} blog posts</span>
+                <span>·</span>
+                <span>{results.stats.caseStudiesFound} case studies</span>
               </div>
             )}
             <button
@@ -471,6 +564,25 @@ export default function Home() {
                   }`}
                 >
                   {results.blogCTAs.length}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("casestudy")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  activeTab === "casestudy"
+                    ? "bg-slate-700 text-white"
+                    : "text-slate-400 hover:text-slate-300"
+                }`}
+              >
+                Case Study CTAs
+                <span
+                  className={`ml-2 px-1.5 py-0.5 rounded text-xs font-semibold ${
+                    activeTab === "casestudy"
+                      ? "bg-amber-600 text-white"
+                      : "bg-slate-700 text-slate-400"
+                  }`}
+                >
+                  {results.caseStudyCTAs.length}
                 </span>
               </button>
             </div>
@@ -614,6 +726,86 @@ export default function Home() {
                               target="_blank"
                               rel="noreferrer"
                               className="text-blue-400 text-xs hover:underline truncate block"
+                            >
+                              {c.targetUrl}
+                            </a>
+                          </div>
+
+                          <CopyButton
+                            text={c.targetUrl}
+                            label="Copy URL"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+            {/* Case Study CTAs Tab */}
+            {activeTab === "casestudy" && (
+              <div className="space-y-3">
+                {results.caseStudyCTAs.length === 0 ? (
+                  <div className="bg-slate-900 rounded-2xl p-8 border border-slate-800 text-center">
+                    <p className="text-slate-400">No case study CTA suggestions generated.</p>
+                    <p className="text-slate-600 text-sm mt-1">
+                      No case studies were strongly relevant to this draft&apos;s topics.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-slate-500 text-sm px-1">
+                      {results.caseStudyCTAs.length} case study CTA
+                      {results.caseStudyCTAs.length !== 1 ? "s" : ""} — each links to a real-world
+                      example that reinforces a section of your draft.
+                    </p>
+                    {results.caseStudyCTAs.map((c, i) => (
+                      <div
+                        key={i}
+                        className="bg-slate-900 rounded-2xl p-5 border border-slate-800 hover:border-amber-800/50 transition"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0 space-y-3">
+                            {/* Company badge + CTA sentence */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-amber-500/20 text-amber-300 border-amber-500/30">
+                                  Case Study
+                                </span>
+                                {c.companyName && (
+                                  <span className="text-xs text-amber-400 font-medium">
+                                    {c.companyName}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                                CTA Sentence to insert
+                              </p>
+                              <p className="text-slate-200 text-sm leading-relaxed">
+                                {highlightAnchor(c.ctaSentence, c.anchorText)}
+                              </p>
+                            </div>
+
+                            {/* Insert location */}
+                            {c.insertAfterParagraph && (
+                              <div className="bg-slate-950 rounded-lg px-3 py-2 border border-slate-800">
+                                <p className="text-xs text-slate-600 mb-1">Insert after paragraph starting with:</p>
+                                <p className="text-slate-400 text-xs italic">
+                                  &ldquo;{c.insertAfterParagraph}&rdquo;
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Target case study */}
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-slate-500 text-xs">Links to:</span>
+                              <span className="text-slate-200 text-xs">{c.targetTitle}</span>
+                            </div>
+                            <a
+                              href={c.targetUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-amber-400 text-xs hover:underline truncate block"
                             >
                               {c.targetUrl}
                             </a>

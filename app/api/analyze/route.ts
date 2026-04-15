@@ -243,6 +243,22 @@ export interface BlogCTAResult {
   insertAfterParagraph: string;
 }
 
+export interface CaseStudyCTAResult {
+  ctaSentence: string;
+  anchorText: string;
+  targetUrl: string;
+  targetTitle: string;
+  insertAfterParagraph: string;
+  companyName: string;
+}
+
+interface CaseStudyEntry {
+  url: string;
+  company: string;
+  title: string;
+  description: string;
+}
+
 // ─── Slug → searchable terms ─────────────────────────────────────────────────
 
 function slugToTerms(url: string): string[] {
@@ -577,6 +593,153 @@ function buildBlogPageEntries(urls: string[]): PageEntry[] {
     });
 }
 
+// ─── Case study content fetching ─────────────────────────────────────────────
+
+async function fetchCaseStudyContent(url: string): Promise<CaseStudyEntry | null> {
+  try {
+    const res = await axios.get(url, {
+      timeout: 6000,
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; RochysLinkBot/1.0)" },
+      maxRedirects: 3,
+    });
+    const $ = cheerio.load(res.data);
+
+    // Extract title from h1 or <title>
+    const h1 = $("h1").first().text().trim();
+    const pageTitle = h1 || $("title").text().split("|")[0].trim() || "";
+
+    // Meta description
+    const metaDesc = $('meta[name="description"]').attr("content")?.trim() || "";
+
+    // Key paragraphs (first meaningful text blocks)
+    const paragraphs: string[] = [];
+    $("p, h2, h3, li").each((_, el) => {
+      const text = $(el).text().trim();
+      if (text.length > 50 && paragraphs.length < 6) {
+        paragraphs.push(text.slice(0, 200));
+      }
+    });
+
+    const description = (metaDesc || paragraphs.slice(0, 3).join(" ")).slice(0, 500);
+
+    // Extract company name: strip "case study" suffix from h1 or derive from slug
+    const company = pageTitle
+      ? pageTitle.replace(/\s*case\s*study\s*/i, "").trim()
+      : new URL(url).pathname
+          .split("/").pop()!
+          .replace(/-case-study$/, "")
+          .split("-")
+          .map((w) => SEGMENT_OVERRIDES[w] ?? (w.charAt(0).toUpperCase() + w.slice(1)))
+          .join(" ");
+
+    return { url, company: company || pageTitle, title: pageTitle || company, description };
+  } catch {
+    // Fallback: derive from hardcoded data or slug
+    const hardcoded = HARDCODED_PAGES.find(
+      (h) => h.url.replace(/\/$/, "") === url.replace(/\/$/, "")
+    );
+    if (hardcoded) {
+      const company = hardcoded.title.replace(/\s*case\s*study\s*/i, "").trim();
+      return { url, company, title: hardcoded.title, description: "" };
+    }
+    return null;
+  }
+}
+
+async function buildCaseStudyEntries(urls: string[]): Promise<CaseStudyEntry[]> {
+  const results = await Promise.all(urls.map(fetchCaseStudyContent));
+  return results.filter((r): r is CaseStudyEntry => r !== null);
+}
+
+async function generateCaseStudyCTAs(
+  blogContent: string,
+  caseStudies: CaseStudyEntry[]
+): Promise<CaseStudyCTAResult[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || caseStudies.length === 0) return [];
+
+  const client = new Anthropic({ apiKey });
+
+  const caseStudyList = caseStudies
+    .map(
+      (cs, i) =>
+        `${i + 1}. Company: "${cs.company}"\n   Title: "${cs.title}"\n   URL: ${cs.url}${cs.description ? `\n   Summary: ${cs.description.slice(0, 250)}` : ""}`
+    )
+    .join("\n\n");
+
+  const paragraphs = blogContent
+    .split(/\n{2,}/)
+    .filter((p) => p.trim().length > 60)
+    .slice(0, 20)
+    .map((p, i) => `[P${i + 1}] ${p.trim().slice(0, 200)}`)
+    .join("\n\n");
+
+  const prompt = `You are an expert SEO content strategist. Suggest "case study CTA" sentences for a blog post.
+
+A case study CTA invites the reader to see a real-world example. It must feel like a completely natural next sentence after the paragraph — not tacked on.
+
+STRICT RELEVANCE RULE:
+Only suggest a CTA if the case study is DIRECTLY relevant to the paragraph's specific industry, role, or challenge. If the connection is even slightly forced, skip it.
+
+CTA FORMULA:
+"If you want to see how this works in practice, [descriptive link phrase] shows how [Company] [achieved specific outcome]."
+Or a natural variation — the key is: specific company + specific outcome.
+
+GOOD EXAMPLES:
+- "If you're curious what this looks like at a real dealership, the Sunrise Toyota case study shows how they handled 3x customer volume without adding headcount."
+- "If you want to see this in a health-tech context, the Rupa Health case study shows how their team scaled remote operations across three countries."
+
+BANNED:
+- "Read more", "Click here", "Check out our case study"
+- Vague CTAs with no outcome mentioned
+- Any CTA where the case study industry doesn't match the paragraph topic
+
+INSTRUCTIONS:
+1. For each paragraph, check: is any case study DIRECTLY relevant (same industry, role, or challenge)?
+2. If yes, write a 1-sentence CTA to insert at the end of that paragraph
+3. Set "companyName" to the company in the case study
+4. Return max 3 CTAs across DIFFERENT paragraph numbers (never two at the same [P#])
+5. Quality over quantity — return fewer CTAs rather than stretch relevance
+
+BLOG PARAGRAPHS:
+---
+${paragraphs}
+---
+
+CASE STUDIES:
+${caseStudyList}
+
+Return ONLY a valid JSON array, no markdown:
+[
+  {
+    "ctaSentence": "full sentence to insert",
+    "anchorText": "the specific noun phrase within the sentence to hyperlink",
+    "targetUrl": "...",
+    "targetTitle": "...",
+    "companyName": "...",
+    "insertAfterParagraph": "[P#] first 6-8 words of that paragraph"
+  }
+]`;
+
+  try {
+    const message = await client.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const text = message.content[0].type === "text" ? message.content[0].text : "";
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+
+    const parsed: CaseStudyCTAResult[] = JSON.parse(jsonMatch[0]);
+    return parsed.filter((item) => item.ctaSentence && item.anchorText && item.targetUrl);
+  } catch (e) {
+    console.error("[claude] Case Study CTA error:", e);
+    return [];
+  }
+}
+
 // ─── Pre-filter blog posts by keyword overlap with blog draft ────────────────
 
 function preFilterBlogPosts(blogContent: string, blogPosts: PageEntry[], maxResults = 40): PageEntry[] {
@@ -733,18 +896,34 @@ export async function POST(req: NextRequest) {
     // 4. Find exact matches
     const exactMatches = findExactMatches(blogContent, exactMatchPages);
 
-    // 5. Generate blog CTAs with Claude
-    const blogCTAs = await generateBlogCTAs(blogContent, blogPosts);
+    // 5. Get case study URLs (from sitemap or hardcoded fallback)
+    const caseStudyUrls =
+      exactMatchUrlSets[1].length > 0
+        ? exactMatchUrlSets[1]
+        : HARDCODED_PAGES.filter((p) =>
+            new URL(p.url).pathname.startsWith("/case-studies")
+          ).map((p) => p.url);
 
-    console.log(`[analyze] exact-match pages: ${exactMatchPages.length}, blog posts: ${blogPosts.length}`);
-    console.log(`[analyze] exact matches found: ${exactMatches.length}, blog CTAs: ${blogCTAs.length}`);
+    // 6. Fetch case study content + generate blog CTAs in parallel
+    const [blogCTAs, caseStudyEntries] = await Promise.all([
+      generateBlogCTAs(blogContent, blogPosts),
+      buildCaseStudyEntries(caseStudyUrls),
+    ]);
+
+    // 7. Generate case study CTAs with Claude
+    const caseStudyCTAs = await generateCaseStudyCTAs(blogContent, caseStudyEntries);
+
+    console.log(`[analyze] exact-match pages: ${exactMatchPages.length}, blog posts: ${blogPosts.length}, case studies: ${caseStudyEntries.length}`);
+    console.log(`[analyze] exact matches: ${exactMatches.length}, blog CTAs: ${blogCTAs.length}, case study CTAs: ${caseStudyCTAs.length}`);
 
     return NextResponse.json({
       exactMatches,
       blogCTAs,
+      caseStudyCTAs,
       stats: {
         servicePagesFound: exactMatchPages.length,
         blogPostsFound: blogPosts.length,
+        caseStudiesFound: caseStudyEntries.length,
       },
     });
   } catch (e: unknown) {

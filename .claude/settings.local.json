@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs wc:*)",
+      "Bash(gh api:*)",
+      "Bash(git init:*)",
+      "Bash(git remote:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git commit:*)",
+      "Bash(npm run:*)",
+      "Bash(./node_modules/.bin/next build:*)",
+      "Bash(npx next:*)",
+      "Bash(cmd /c \"dir \\\\\"C:\\\\Users\\\\galva\\\\rochys-internal-linking-tool\\\\node_modules\\\\.bin\\\\\" 2>&1 | head -5\")",
+      "Bash(cmd /c \"dir C:\\\\Users\\\\galva\\\\rochys-internal-linking-tool\\\\node_modules\\\\.bin\\\\next* 2>&1\")",
+      "Bash(cmd /c \"npx tsc --noEmit --project C:\\\\Users\\\\galva\\\\rochys-internal-linking-tool\\\\tsconfig.json 2>&1\")",
+      "Bash(cmd /c \"where npm\" 2>&1)"
+    ]
+  }
+}
