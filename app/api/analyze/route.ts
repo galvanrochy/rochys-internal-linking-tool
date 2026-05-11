@@ -702,6 +702,7 @@ Return ONLY a valid JSON array, no markdown:
 ]`;
 
   try {
+    console.log("[debug] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY, "model:", "claude-sonnet-4-6");
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1000,
@@ -849,6 +850,7 @@ Return ONLY a valid JSON array, no markdown:
 ]`;
 
   try {
+    console.log("[debug] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY, "model:", "claude-sonnet-4-6");
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1000,
@@ -976,6 +978,7 @@ Return ONLY a valid JSON array, no markdown:
 ]`;
 
   try {
+    console.log("[debug] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY, "model:", "claude-sonnet-4-6");
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1500,
