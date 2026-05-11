@@ -19,6 +19,14 @@ interface BlogCTAResult {
   insertAfterParagraph: string;
 }
 
+interface PlaybookCTAResult {
+  ctaSentence: string;
+  anchorText: string;
+  targetUrl: string;
+  targetTitle: string;
+  insertAfterParagraph: string;
+}
+
 interface CaseStudyCTAResult {
   ctaSentence: string;
   anchorText: string;
@@ -31,10 +39,12 @@ interface CaseStudyCTAResult {
 interface AnalyzeResponse {
   exactMatches: ExactMatchResult[];
   blogCTAs: BlogCTAResult[];
+  playbookCTAs: PlaybookCTAResult[];
   caseStudyCTAs: CaseStudyCTAResult[];
   stats: {
     servicePagesFound: number;
     blogPostsFound: number;
+    playbooksFound: number;
     caseStudiesFound: number;
   };
 }
@@ -86,7 +96,7 @@ export default function Home() {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [results, setResults] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"exact" | "blog" | "casestudy">("exact");
+  const [activeTab, setActiveTab] = useState<"exact" | "blog" | "playbook" | "casestudy">("exact");
   const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
@@ -116,6 +126,7 @@ export default function Home() {
       "Scanning /blog posts…",
       "Finding exact match opportunities…",
       "Generating blog CTA suggestions with AI…",
+      "Generating playbook CTAs with AI…",
       "Fetching case studies & generating case study CTAs…",
     ];
     let msgIdx = 0;
@@ -139,6 +150,8 @@ export default function Home() {
           ? "exact"
           : data.blogCTAs.length > 0
           ? "blog"
+          : data.playbookCTAs.length > 0
+          ? "playbook"
           : "casestudy"
       );
     } catch (e: unknown) {
@@ -353,7 +366,75 @@ export default function Home() {
     checkPage(40);
     rule();
 
-    // ── Section 3: Case Study CTAs ────────────────────────────────────────────
+    // ── Section 3: Playbook CTAs ──────────────────────────────────────────────
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    setColor(COLORS.heading);
+    doc.text(`Playbook CTAs  (${results.playbookCTAs.length})`, margin, y);
+    y += 22;
+
+    if (results.playbookCTAs.length === 0) {
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "italic");
+      setColor(COLORS.muted);
+      doc.text("No playbook CTA suggestions generated.", margin, y);
+      y += 20;
+    } else {
+      results.playbookCTAs.forEach((c, i) => {
+        checkPage(100);
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        setColor(COLORS.subhead);
+        doc.text(`${i + 1}.`, margin, y);
+        y += 15;
+
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        setColor(COLORS.body);
+        const ctaLines = wrap(c.ctaSentence, 11, contentW - 12);
+        doc.text(ctaLines, margin + 12, y);
+        y += ctaLines.length * 15;
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        setColor(COLORS.label);
+        doc.text("Links to:", margin + 12, y);
+        setColor(COLORS.body);
+        const titleLines = wrap(c.targetTitle, 9, contentW - 60);
+        doc.text(titleLines, margin + 58, y);
+        y += titleLines.length * 13;
+
+        setColor(COLORS.subhead);
+        const urlLines = wrap(c.targetUrl, 9, contentW - 12);
+        doc.text(urlLines, margin + 12, y);
+        y += urlLines.length * 13;
+
+        if (c.insertAfterParagraph) {
+          checkPage(25);
+          doc.setFontSize(8.5);
+          doc.setFont("helvetica", "italic");
+          setColor(COLORS.muted);
+          const insertLines = wrap(`Insert after: "${c.insertAfterParagraph}"`, 8.5, contentW - 12);
+          doc.text(insertLines, margin + 12, y);
+          y += insertLines.length * 12;
+        }
+
+        y += 10;
+        if (i < results.playbookCTAs.length - 1) {
+          doc.setDrawColor(COLORS.rule[0], COLORS.rule[1], COLORS.rule[2]);
+          doc.setLineWidth(0.3);
+          doc.line(margin + 12, y, pageW - margin, y);
+          y += 10;
+        }
+      });
+    }
+
+    y += 10;
+    checkPage(40);
+    rule();
+
+    // ── Section 4: Case Study CTAs ────────────────────────────────────────────
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     setColor(COLORS.heading);
@@ -445,6 +526,8 @@ export default function Home() {
                 <span>{results.stats.servicePagesFound} service pages</span>
                 <span>·</span>
                 <span>{results.stats.blogPostsFound} blog posts</span>
+                <span>·</span>
+                <span>{results.stats.playbooksFound} playbooks</span>
                 <span>·</span>
                 <span>{results.stats.caseStudiesFound} case studies</span>
               </div>
@@ -564,6 +647,25 @@ export default function Home() {
                   }`}
                 >
                   {results.blogCTAs.length}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("playbook")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  activeTab === "playbook"
+                    ? "bg-slate-700 text-white"
+                    : "text-slate-400 hover:text-slate-300"
+                }`}
+              >
+                Playbook CTAs
+                <span
+                  className={`ml-2 px-1.5 py-0.5 rounded text-xs font-semibold ${
+                    activeTab === "playbook"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-slate-700 text-slate-400"
+                  }`}
+                >
+                  {results.playbookCTAs.length}
                 </span>
               </button>
               <button
@@ -742,6 +844,79 @@ export default function Home() {
                 )}
               </div>
             )}
+            {/* Playbook CTAs Tab */}
+            {activeTab === "playbook" && (
+              <div className="space-y-3">
+                {results.playbookCTAs.length === 0 ? (
+                  <div className="bg-slate-900 rounded-2xl p-8 border border-slate-800 text-center">
+                    <p className="text-slate-400">No playbook CTA suggestions generated.</p>
+                    <p className="text-slate-600 text-sm mt-1">
+                      No playbooks were strongly relevant to this draft&apos;s topics.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-slate-500 text-sm px-1">
+                      {results.playbookCTAs.length} playbook CTA
+                      {results.playbookCTAs.length !== 1 ? "s" : ""} — each links to a step-by-step
+                      execution framework relevant to your draft.
+                    </p>
+                    {results.playbookCTAs.map((c, i) => (
+                      <div
+                        key={i}
+                        className="bg-slate-900 rounded-2xl p-5 border border-slate-800 hover:border-emerald-800/50 transition"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0 space-y-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+                                  Playbook
+                                </span>
+                              </div>
+                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                                CTA Sentence to insert
+                              </p>
+                              <p className="text-slate-200 text-sm leading-relaxed">
+                                {highlightAnchor(c.ctaSentence, c.anchorText)}
+                              </p>
+                            </div>
+
+                            {c.insertAfterParagraph && (
+                              <div className="bg-slate-950 rounded-lg px-3 py-2 border border-slate-800">
+                                <p className="text-xs text-slate-600 mb-1">Insert after paragraph starting with:</p>
+                                <p className="text-slate-400 text-xs italic">
+                                  &ldquo;{c.insertAfterParagraph}&rdquo;
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-slate-500 text-xs">Links to:</span>
+                              <span className="text-slate-200 text-xs">{c.targetTitle}</span>
+                            </div>
+                            <a
+                              href={c.targetUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-emerald-400 text-xs hover:underline truncate block"
+                            >
+                              {c.targetUrl}
+                            </a>
+                          </div>
+
+                          <CopyButton
+                            text={c.targetUrl}
+                            label="Copy URL"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Case Study CTAs Tab */}
             {activeTab === "casestudy" && (
               <div className="space-y-3">

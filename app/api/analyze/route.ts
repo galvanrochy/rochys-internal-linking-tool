@@ -246,6 +246,14 @@ export interface BlogCTAResult {
   insertAfterParagraph: string;
 }
 
+export interface PlaybookCTAResult {
+  ctaSentence: string;
+  anchorText: string;
+  targetUrl: string;
+  targetTitle: string;
+  insertAfterParagraph: string;
+}
+
 export interface CaseStudyCTAResult {
   ctaSentence: string;
   anchorText: string;
@@ -593,6 +601,125 @@ function buildBlogPageEntries(urls: string[]): PageEntry[] {
     });
 }
 
+// ─── Playbook page entries ────────────────────────────────────────────────────
+
+function buildPlaybookPageEntries(urls: string[]): PageEntry[] {
+  return urls
+    .filter((url) => {
+      try {
+        const parts = new URL(url).pathname.split("/").filter(Boolean);
+        return parts.length >= 2 && parts[0] === "playbooks";
+      } catch { return false; }
+    })
+    .map((url) => {
+      const terms = slugToTerms(url);
+      const slug = new URL(url).pathname.split("/").filter(Boolean).pop() || "";
+      const readableTitle = slug
+        .split("-")
+        .map((word) => {
+          if (SEGMENT_OVERRIDES[word]) return SEGMENT_OVERRIDES[word];
+          const lowercase = new Set(["for","and","or","the","a","an","in","on","at","to","of","with","by","from","vs"]);
+          return lowercase.has(word) ? word : word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(" ");
+
+      return {
+        url,
+        title: readableTitle || terms[0] || url,
+        description: "",
+        slugTerms: terms,
+        section: "Playbook",
+      };
+    });
+}
+
+// ─── Playbook CTA generation (Claude) ────────────────────────────────────────
+
+async function generatePlaybookCTAs(blogContent: string, allPlaybooks: PageEntry[]): Promise<PlaybookCTAResult[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || allPlaybooks.length === 0) return [];
+
+  const client = new Anthropic({ apiKey });
+
+  const relevantPlaybooks = preFilterBlogPosts(blogContent, allPlaybooks, 20);
+  if (relevantPlaybooks.length === 0) return [];
+
+  const playbookList = relevantPlaybooks
+    .map((p, i) => `${i + 1}. Title: "${p.title}"\n   URL: ${p.url}`)
+    .join("\n\n");
+
+  const paragraphs = blogContent
+    .split(/\n{2,}/)
+    .filter((p) => p.trim().length > 60)
+    .slice(0, 20)
+    .map((p, i) => `[P${i + 1}] ${p.trim().slice(0, 200)}`)
+    .join("\n\n");
+
+  const prompt = `You are an expert SEO content strategist. Suggest "playbook CTA" sentences for a blog post.
+
+A playbook CTA invites the reader to follow a step-by-step execution framework. It must feel like a completely natural next sentence after the paragraph — not tacked on.
+
+STRICT RELEVANCE RULE:
+Only suggest a CTA if the playbook is DIRECTLY relevant to the paragraph's specific topic, role, or task. If the connection is even slightly forced, skip it.
+
+CTA FORMULA:
+"If you want a step-by-step execution framework for this, this playbook on [topic] walks you through exactly how to [outcome]."
+Or a natural variation — the key is: specific topic + specific actionable outcome.
+
+GOOD EXAMPLES:
+- "If you want a step-by-step execution framework for this, this playbook on hiring a virtual assistant walks you through exactly how to write the job spec, screen applicants, and onboard in under two weeks."
+- "If you'd rather follow a tested process, this playbook on building a remote content team covers exactly how to structure roles, set output targets, and run async review cycles."
+
+BANNED:
+- "Click here", "Read more", "Learn about X", "Check out our playbook"
+- CTAs that are a stretch — if it feels forced, omit it entirely
+- Vague CTAs with no concrete outcome
+
+INSTRUCTIONS:
+1. Read each paragraph and identify its specific topic
+2. Check the playbook list — does ANY playbook cover that exact subtopic?
+3. If yes, write a 1-sentence CTA that reads as a natural next sentence
+4. Return 2–4 CTAs spread across DIFFERENT paragraph numbers — max 1 CTA per paragraph
+5. Quality over quantity — return fewer CTAs rather than stretch relevance
+
+BLOG PARAGRAPHS:
+---
+${paragraphs}
+---
+
+AVAILABLE PLAYBOOKS:
+${playbookList}
+
+Return ONLY a valid JSON array, no markdown:
+[
+  {
+    "ctaSentence": "full sentence to insert after the paragraph",
+    "anchorText": "the specific noun phrase within the sentence to hyperlink",
+    "targetUrl": "...",
+    "targetTitle": "...",
+    "insertAfterParagraph": "[P#] first 6-8 words of that paragraph"
+  }
+]`;
+
+  try {
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const text = message.content[0].type === "text" ? message.content[0].text : "";
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+
+    const parsed: PlaybookCTAResult[] = JSON.parse(jsonMatch[0]);
+    return parsed.filter((item) => item.ctaSentence && item.anchorText && item.targetUrl);
+  } catch (e) {
+    console.error("[claude] Playbook CTA error:", e);
+    return [];
+  }
+}
+
 // ─── Case study content fetching ─────────────────────────────────────────────
 
 async function fetchCaseStudyContent(url: string): Promise<CaseStudyEntry | null> {
@@ -896,7 +1023,7 @@ export async function POST(req: NextRequest) {
     // 4. Find exact matches
     const exactMatches = findExactMatches(blogContent, exactMatchPages);
 
-    // 5. Get case study URLs (from sitemap or hardcoded fallback)
+    // 5. Get case study URLs (from sitemap or hardcoded fallback) + playbook entries
     const caseStudyUrls =
       exactMatchUrlSets[1].length > 0
         ? exactMatchUrlSets[1]
@@ -904,25 +1031,30 @@ export async function POST(req: NextRequest) {
             new URL(p.url).pathname.startsWith("/case-studies")
           ).map((p) => p.url);
 
-    // 6. Fetch case study content + generate blog CTAs in parallel
-    const [blogCTAs, caseStudyEntries] = await Promise.all([
+    const playbookPages = buildPlaybookPageEntries(exactMatchUrlSets[2]);
+
+    // 6. Fetch case study content + generate blog/playbook CTAs in parallel
+    const [blogCTAs, playbookCTAs, caseStudyEntries] = await Promise.all([
       generateBlogCTAs(blogContent, blogPosts),
+      generatePlaybookCTAs(blogContent, playbookPages),
       buildCaseStudyEntries(caseStudyUrls),
     ]);
 
     // 7. Generate case study CTAs with Claude
     const caseStudyCTAs = await generateCaseStudyCTAs(blogContent, caseStudyEntries);
 
-    console.log(`[analyze] exact-match pages: ${exactMatchPages.length}, blog posts: ${blogPosts.length}, case studies: ${caseStudyEntries.length}`);
-    console.log(`[analyze] exact matches: ${exactMatches.length}, blog CTAs: ${blogCTAs.length}, case study CTAs: ${caseStudyCTAs.length}`);
+    console.log(`[analyze] exact-match pages: ${exactMatchPages.length}, blog posts: ${blogPosts.length}, playbooks: ${playbookPages.length}, case studies: ${caseStudyEntries.length}`);
+    console.log(`[analyze] exact matches: ${exactMatches.length}, blog CTAs: ${blogCTAs.length}, playbook CTAs: ${playbookCTAs.length}, case study CTAs: ${caseStudyCTAs.length}`);
 
     return NextResponse.json({
       exactMatches,
       blogCTAs,
+      playbookCTAs,
       caseStudyCTAs,
       stats: {
         servicePagesFound: exactMatchPages.length,
         blogPostsFound: blogPosts.length,
+        playbooksFound: playbookPages.length,
         caseStudiesFound: caseStudyEntries.length,
       },
     });

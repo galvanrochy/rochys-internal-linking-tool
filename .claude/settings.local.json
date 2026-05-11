@@ -14,7 +14,30 @@
       "Bash(cmd /c \"dir \\\\\"C:\\\\Users\\\\galva\\\\rochys-internal-linking-tool\\\\node_modules\\\\.bin\\\\\" 2>&1 | head -5\")",
       "Bash(cmd /c \"dir C:\\\\Users\\\\galva\\\\rochys-internal-linking-tool\\\\node_modules\\\\.bin\\\\next* 2>&1\")",
       "Bash(cmd /c \"npx tsc --noEmit --project C:\\\\Users\\\\galva\\\\rochys-internal-linking-tool\\\\tsconfig.json 2>&1\")",
-      "Bash(cmd /c \"where npm\" 2>&1)"
+      "Bash(cmd /c \"where npm\" 2>&1)",
+      "PowerShell(Get-ChildItem *)",
+      "WebFetch(domain:www.hireoverseas.com)",
+      "Bash(npm install *)",
+      "Bash(pkill -f \"next dev\")",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST http://localhost:3000/api/analyze -H 'Content-Type: application/json' -d '{\"blogContent\":\"We help businesses hire virtual assistants, content writers, SEO specialists, and social media managers for their remote teams. Our ChatGPT experts and HubSpot specialists are highly skilled. Companies looking to hire graphic designers, video editors, and email marketing specialists will find top talent here. We also help with hiring executive assistants and data analysts. If you need a bookkeeper or payroll specialist, we can help. Remote workers from the Philippines, South Africa, and Latin America are available.\"}')",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/analyze -H 'Content-Type: application/json' -d '{\"blogContent\":\"We help businesses hire virtual assistants, content writers, SEO specialists, and social media managers for their remote teams. Our ChatGPT experts and HubSpot specialists are highly skilled. Companies looking to hire graphic designers, video editors, and email marketing specialists will find top talent here. We also help with hiring executive assistants and data analysts. If you need a bookkeeper or payroll specialist. Remote workers from the Philippines.\"}')",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /tmp/api_response.json -w 'HTTP %{http_code}' -X POST http://localhost:3000/api/analyze -H 'Content-Type: application/json' -d '{\"blogContent\":\"We help businesses hire virtual assistants, content writers, SEO specialists, and social media managers. Our ChatGPT experts and HubSpot specialists are highly skilled. Hire graphic designers, video editors, email marketing specialists, copywriters, and bookkeepers. Remote workers from the Philippines, South Africa, and Latin America are available.\"}')",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -X POST http://localhost:3004/api/analyze -H 'Content-Type: application/json' -d '{\"blogContent\":\"We help businesses hire virtual assistants, content writers, SEO specialists, and social media managers. Our ChatGPT experts and HubSpot specialists are highly skilled. Hire graphic designers, video editors, email marketing specialists, copywriters, and bookkeepers. Remote workers from the Philippines, South Africa, and Latin America are available.\"}')",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(node -e \"const c=[];process.stdin.on\\('data',d=>c.push\\(d\\)\\);process.stdin.on\\('end',\\(\\)=>{const d=JSON.parse\\(c.join\\(''\\)\\);console.log\\('Exact matches:',d.exactMatches?.length\\);console.log\\('Stats:',JSON.stringify\\(d.stats\\)\\);\\(d.exactMatches||[]\\).forEach\\(m=>console.log\\(' ['+m.section+'] \\\\\"'+m.anchorText+'\\\\\"'\\)\\);if\\(d.error\\)console.log\\('ERROR:',d.error\\);}\\);\")",
+      "Bash(node -e \"const c=[];process.stdin.on\\('data',d=>c.push\\(d\\)\\);process.stdin.on\\('end',\\(\\)=>{const d=JSON.parse\\(c.join\\(''\\)\\);console.log\\('Exact matches:',d.exactMatches?.length\\);\\(d.exactMatches||[]\\).forEach\\(m=>console.log\\(' ['+m.section+'] \\\\\"'+m.anchorText+'\\\\\"'\\)\\);if\\(d.error\\)console.log\\('ERROR:',d.error\\);}\\);\")",
+      "Bash(dir \"C:\\\\Users\\\\galva\\\\.claude\\\\projects\\\\C--Users-galva-rochys-internal-linking-tool\\\\memory\")",
+      "Bash(git add *)",
+      "Bash(git push *)",
+      "PowerShell(Start-Process -FilePath \"cmd.exe\" -ArgumentList \"/c npm run dev -- --webpack > C:\\\\Users\\\\galva\\\\AppData\\\\Local\\\\Temp\\\\devserver.log 2>&1\" -WorkingDirectory \"C:\\\\Users\\\\galva\\\\rochys-internal-linking-tool\" -WindowStyle Hidden)",
+      "PowerShell(cd C:\\\\Users\\\\galva\\\\rochys-internal-linking-tool; npx tsc --noEmit 2>&1 | Where-Object { $_ -notmatch \"node_modules\" } | Select-Object -First 30)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3005\" -UseBasicParsing | Select-Object -ExpandProperty StatusCode)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(Start-Sleep -Seconds 5; $resp = Invoke-WebRequest -Uri \"http://localhost:3006\" -UseBasicParsing -ErrorAction SilentlyContinue; if \\($resp\\) { $resp.StatusCode } else { \"Error\" })"
     ]
   }
 }
