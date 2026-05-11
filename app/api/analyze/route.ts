@@ -107,6 +107,9 @@ const SEGMENT_OVERRIDES: Record<string, string> = {
   ecommerce: "eCommerce",
   facebook: "Facebook",
   google: "Google",
+  philippines: "Philippines",
+  "south-africa": "South Africa",
+  "latin-america": "Latin America",
 };
 
 // Generic slug words that shouldn't be used as standalone anchor text
@@ -447,6 +450,7 @@ const BLOCKED_SINGLE_WORDS = new Set([
   "growth", "content", "email", "video", "web", "digital", "social", "media",
   "brand", "product", "project", "client", "customer", "user", "people",
   "cost", "price", "rate", "time", "task", "work", "help", "need",
+  "virtual", // too vague on its own; "virtual assistant/s" still matches as 2-word
 ]);
 
 // Phrases that are too brand-generic to link (reads as "self-promotion" not helpful anchor)
@@ -463,19 +467,14 @@ function isHighQualityAnchor(anchorText: string): boolean {
   // Block explicit phrases
   if (BLOCKED_PHRASES.has(lower)) return false;
 
-  // Single-word matches: only allow known brands/tools/acronyms
+  // Single-word: reject common/generic nouns and their plural forms
   if (words.length === 1) {
-    // Known brand from SEGMENT_OVERRIDES (e.g. "ChatGPT", "Zapier", "HubSpot")
-    const isKnownBrand = Object.values(SEGMENT_OVERRIDES).some(
-      (v) => v.toLowerCase() === lower
-    );
-    // Acronym-style (all caps, 2–5 chars): "SEO", "AI", "CRM", "API"
-    const isAcronym = /^[A-Z]{2,5}$/.test(text);
-    if (!isKnownBrand && !isAcronym) return false;
+    const stemmed = lower.endsWith("ies") ? lower.slice(0, -3) + "y"
+      : lower.endsWith("es") ? lower.slice(0, -2)
+      : lower.endsWith("s") ? lower.slice(0, -1)
+      : lower;
+    if (BLOCKED_SINGLE_WORDS.has(lower) || BLOCKED_SINGLE_WORDS.has(stemmed)) return false;
   }
-
-  // Reject single-word common nouns even if capitalized
-  if (words.length === 1 && BLOCKED_SINGLE_WORDS.has(lower)) return false;
 
   return true;
 }
@@ -503,13 +502,14 @@ function findExactMatches(blogContent: string, pages: PageEntry[]): ExactMatchRe
       (a, b) => b.split(/\s+/).length - a.split(/\s+/).length
     );
 
-    // Build candidates including plural variants for multi-word terms
+    // Build candidates including plural variants (all terms, single and multi-word)
     const withPlurals: string[] = [];
     for (const term of candidates) {
       withPlurals.push(term);
       const words = term.split(/\s+/);
-      if (words.length >= 2) {
-        const lastWord = words[words.length - 1];
+      const lastWord = words[words.length - 1];
+      // Skip if term already ends in 's' (e.g. "Philippines", "alternatives")
+      if (!/s$/i.test(lastWord)) {
         const plural = /[sxz]$/i.test(lastWord) || /[^aeiou]h$/i.test(lastWord)
           ? term + "es"
           : term + "s";
@@ -723,7 +723,7 @@ Return ONLY a valid JSON array, no markdown:
 
   try {
     const message = await client.messages.create({
-      model: "claude-opus-4-6",
+      model: "claude-sonnet-4-6",
       max_tokens: 1000,
       messages: [{ role: "user", content: prompt }],
     });
@@ -850,7 +850,7 @@ Return ONLY a valid JSON array, no markdown:
 
   try {
     const message = await client.messages.create({
-      model: "claude-opus-4-6",
+      model: "claude-sonnet-4-6",
       max_tokens: 1500,
       messages: [{ role: "user", content: prompt }],
     });
