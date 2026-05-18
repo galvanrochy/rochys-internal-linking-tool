@@ -826,7 +826,7 @@ INSTRUCTIONS:
 1. For each paragraph, check: is any case study DIRECTLY relevant (same industry, role, or challenge)?
 2. If yes, write a 1-sentence CTA to insert at the end of that paragraph
 3. Set "companyName" to the company in the case study
-4. Return max 3 CTAs across DIFFERENT paragraph numbers (never two at the same [P#])
+4. Return max 5 CTAs across DIFFERENT paragraph numbers (never two at the same [P#])
 5. Quality over quantity — return fewer CTAs rather than stretch relevance
 
 BLOG PARAGRAPHS:
@@ -853,7 +853,7 @@ Return ONLY a valid JSON array, no markdown:
     console.log("[debug] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY, "model:", "claude-sonnet-4-6");
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1000,
+      max_tokens: 1500,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -917,7 +917,7 @@ async function generateBlogCTAs(blogContent: string, allBlogPosts: PageEntry[]):
   const client = new Anthropic({ apiKey });
 
   // Pre-filter to the most topically relevant posts before sending to Claude
-  const relevantPosts = preFilterBlogPosts(blogContent, allBlogPosts, 40);
+  const relevantPosts = preFilterBlogPosts(blogContent, allBlogPosts, 60);
   console.log(`[blogCTAs] preFilter result: ${relevantPosts.length} relevant posts (from ${allBlogPosts.length})`);
   if (relevantPosts.length === 0) { console.warn("[blogCTAs] EARLY EXIT: 0 posts passed preFilter"); return []; }
 
@@ -958,7 +958,7 @@ INSTRUCTIONS:
 2. Check the blog list — does ANY post cover that exact subtopic? If not, skip that paragraph
 3. For each valid match, write a CTA sentence that reads as a natural next sentence after the paragraph
 4. Include "anchorText" = the exact descriptive noun phrase within the CTA to hyperlink (not the full sentence)
-5. Return 3–6 CTAs spread across DIFFERENT paragraph numbers — max 1 CTA per paragraph. Never put two CTAs at the same [P#].
+5. Return 5–8 CTAs spread across DIFFERENT paragraph numbers — max 1 CTA per paragraph. Never put two CTAs at the same [P#].
 6. Quality over quantity; skip any CTA where the connection feels even slightly forced.
 
 BLOG PARAGRAPHS:
@@ -984,7 +984,7 @@ Return ONLY a valid JSON array, no markdown:
     console.log(`[blogCTAs] sending ${relevantPosts.length} posts to Claude, model: claude-sonnet-4-6`);
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1500,
+      max_tokens: 2500,
       messages: [{ role: "user", content: prompt }],
     });
 
