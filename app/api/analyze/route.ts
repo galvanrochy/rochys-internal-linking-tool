@@ -910,13 +910,16 @@ function preFilterBlogPosts(blogContent: string, blogPosts: PageEntry[], maxResu
 
 async function generateBlogCTAs(blogContent: string, allBlogPosts: PageEntry[]): Promise<BlogCTAResult[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || allBlogPosts.length === 0) return [];
+  console.log(`[blogCTAs] called — allBlogPosts: ${allBlogPosts.length}, apiKey present: ${!!apiKey}`);
+  if (!apiKey) { console.warn("[blogCTAs] EARLY EXIT: no API key"); return []; }
+  if (allBlogPosts.length === 0) { console.warn("[blogCTAs] EARLY EXIT: 0 blog posts passed in"); return []; }
 
   const client = new Anthropic({ apiKey });
 
   // Pre-filter to the most topically relevant posts before sending to Claude
   const relevantPosts = preFilterBlogPosts(blogContent, allBlogPosts, 40);
-  if (relevantPosts.length === 0) return [];
+  console.log(`[blogCTAs] preFilter result: ${relevantPosts.length} relevant posts (from ${allBlogPosts.length})`);
+  if (relevantPosts.length === 0) { console.warn("[blogCTAs] EARLY EXIT: 0 posts passed preFilter"); return []; }
 
   const blogList = relevantPosts
     .map((p, i) => `${i + 1}. Title: "${p.title}"\n   URL: ${p.url}`)
@@ -978,7 +981,7 @@ Return ONLY a valid JSON array, no markdown:
 ]`;
 
   try {
-    console.log("[debug] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY, "model:", "claude-sonnet-4-6");
+    console.log(`[blogCTAs] sending ${relevantPosts.length} posts to Claude, model: claude-sonnet-4-6`);
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1500,
@@ -986,13 +989,20 @@ Return ONLY a valid JSON array, no markdown:
     });
 
     const text = message.content[0].type === "text" ? message.content[0].text : "";
+    console.log(`[blogCTAs] Claude raw response (first 500 chars): ${text.slice(0, 500)}`);
+
     const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return [];
+    if (!jsonMatch) {
+      console.warn("[blogCTAs] EARLY EXIT: no JSON array found in Claude response. Full response:", text);
+      return [];
+    }
 
     const parsed: BlogCTAResult[] = JSON.parse(jsonMatch[0]);
-    return parsed.filter((item) => item.ctaSentence && item.anchorText && item.targetUrl);
+    const filtered = parsed.filter((item) => item.ctaSentence && item.anchorText && item.targetUrl);
+    console.log(`[blogCTAs] parsed ${parsed.length} items, ${filtered.length} passed filter`);
+    return filtered;
   } catch (e) {
-    console.error("[claude] Blog CTA error:", e);
+    console.error("[blogCTAs] Claude API error:", e);
     return [];
   }
 }
