@@ -90,6 +90,101 @@ function highlightAnchor(text: string, anchor: string) {
   );
 }
 
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// Build an HTML string for the CTA sentence with the anchor text wrapped in an
+// <a> tag, ready to paste into a rich-text editor with the link embedded.
+function buildLinkedHtml(sentence: string, anchor: string, url: string) {
+  const escapedAnchor = anchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const hrefSafe = escapeHtml(url).replace(/"/g, "&quot;");
+  const parts = sentence.split(new RegExp(`(${escapedAnchor})`, "i"));
+  return parts
+    .map((part) =>
+      new RegExp(`^${escapedAnchor}$`, "i").test(part)
+        ? `<a href="${hrefSafe}">${escapeHtml(part)}</a>`
+        : escapeHtml(part)
+    )
+    .join("");
+}
+
+// Plaintext fallback: markdown-style link embedded in the sentence.
+function buildLinkedMarkdown(sentence: string, anchor: string, url: string) {
+  const escapedAnchor = anchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return sentence.replace(
+    new RegExp(escapedAnchor, "i"),
+    (match) => `[${match}](${url})`
+  );
+}
+
+async function copyLinkedSentence(sentence: string, anchor: string, url: string) {
+  const html = buildLinkedHtml(sentence, anchor, url);
+  const plain = buildLinkedMarkdown(sentence, anchor, url);
+  try {
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plain], { type: "text/plain" }),
+        }),
+      ]);
+      return;
+    }
+  } catch {
+    // fall through to plaintext
+  }
+  await navigator.clipboard.writeText(plain);
+}
+
+// Clickable CTA sentence — clicking copies the sentence with the anchor text
+// already hyperlinked, ready to paste directly into the content.
+function CopyableCTASentence({
+  sentence,
+  anchor,
+  url,
+}: {
+  sentence: string;
+  anchor: string;
+  url: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  async function handleCopy() {
+    await copyLinkedSentence(sentence, anchor, url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          CTA Sentence to insert
+        </p>
+        <span
+          className={`text-xs font-medium transition ${
+            copied ? "text-emerald-400" : "text-slate-500"
+          }`}
+        >
+          {copied ? "Copied with link!" : "Click to copy with link"}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={handleCopy}
+        title="Click to copy this sentence with the link embedded"
+        className="block w-full text-left rounded-lg px-3 py-2 -mx-3 -my-2 hover:bg-slate-800/60 cursor-pointer transition"
+      >
+        <span className="text-slate-200 text-sm leading-relaxed">
+          {highlightAnchor(sentence, anchor)}
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export default function Home() {
   const [blogContent, setBlogContent] = useState("");
   const [loading, setLoading] = useState(false);
@@ -798,15 +893,12 @@ export default function Home() {
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex-1 min-w-0 space-y-3">
-                            {/* CTA sentence with anchor highlighted */}
-                            <div>
-                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                                CTA Sentence to insert
-                              </p>
-                              <p className="text-slate-200 text-sm leading-relaxed">
-                                {highlightAnchor(c.ctaSentence, c.anchorText)}
-                              </p>
-                            </div>
+                            {/* CTA sentence — click to copy with link embedded */}
+                            <CopyableCTASentence
+                              sentence={c.ctaSentence}
+                              anchor={c.anchorText}
+                              url={c.targetUrl}
+                            />
 
                             {/* Insert location */}
                             {c.insertAfterParagraph && (
@@ -832,11 +924,6 @@ export default function Home() {
                               {c.targetUrl}
                             </a>
                           </div>
-
-                          <CopyButton
-                            text={c.targetUrl}
-                            label="Copy URL"
-                          />
                         </div>
                       </div>
                     ))}
@@ -868,19 +955,17 @@ export default function Home() {
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex-1 min-w-0 space-y-3">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
-                                  Playbook
-                                </span>
-                              </div>
-                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                                CTA Sentence to insert
-                              </p>
-                              <p className="text-slate-200 text-sm leading-relaxed">
-                                {highlightAnchor(c.ctaSentence, c.anchorText)}
-                              </p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+                                Playbook
+                              </span>
                             </div>
+                            {/* CTA sentence — click to copy with link embedded */}
+                            <CopyableCTASentence
+                              sentence={c.ctaSentence}
+                              anchor={c.anchorText}
+                              url={c.targetUrl}
+                            />
 
                             {c.insertAfterParagraph && (
                               <div className="bg-slate-950 rounded-lg px-3 py-2 border border-slate-800">
@@ -904,11 +989,6 @@ export default function Home() {
                               {c.targetUrl}
                             </a>
                           </div>
-
-                          <CopyButton
-                            text={c.targetUrl}
-                            label="Copy URL"
-                          />
                         </div>
                       </div>
                     ))}
@@ -941,25 +1021,23 @@ export default function Home() {
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex-1 min-w-0 space-y-3">
-                            {/* Company badge + CTA sentence */}
-                            <div>
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-amber-500/20 text-amber-300 border-amber-500/30">
-                                  Case Study
+                            {/* Company badge */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-amber-500/20 text-amber-300 border-amber-500/30">
+                                Case Study
+                              </span>
+                              {c.companyName && (
+                                <span className="text-xs text-amber-400 font-medium">
+                                  {c.companyName}
                                 </span>
-                                {c.companyName && (
-                                  <span className="text-xs text-amber-400 font-medium">
-                                    {c.companyName}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                                CTA Sentence to insert
-                              </p>
-                              <p className="text-slate-200 text-sm leading-relaxed">
-                                {highlightAnchor(c.ctaSentence, c.anchorText)}
-                              </p>
+                              )}
                             </div>
+                            {/* CTA sentence — click to copy with link embedded */}
+                            <CopyableCTASentence
+                              sentence={c.ctaSentence}
+                              anchor={c.anchorText}
+                              url={c.targetUrl}
+                            />
 
                             {/* Insert location */}
                             {c.insertAfterParagraph && (
@@ -985,11 +1063,6 @@ export default function Home() {
                               {c.targetUrl}
                             </a>
                           </div>
-
-                          <CopyButton
-                            text={c.targetUrl}
-                            label="Copy URL"
-                          />
                         </div>
                       </div>
                     ))}
